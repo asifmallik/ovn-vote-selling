@@ -74,9 +74,9 @@ contract("AnonymousVoteSelling", (accounts) => {
         console.log(await anonymousVoteSelling.submitVoteProof(params, res, {from: accounts[9]}));
         console.log(await anonymousVoteSelling.verifyVoteProof(3, {from: accounts[9]}));
         console.log(await anonymousVoteSelling.verifyVoteProof(1, {from: accounts[9]}));
-        let initialBalance = await utils.getBalance(accounts[9]);
-        await anonymousVoteSelling.collectReward({from: accounts[9]});
-        let finalBalance = await utils.getBalance(accounts[9]);
+        let initialBalance = await utils.getBalance(accounts[8]);
+        await anonymousVoteSelling.collectReward(accounts[8], {from: accounts[9]});
+        let finalBalance = await utils.getBalance(accounts[8]);
         assert.equal(finalBalance.minus(initialBalance).toString(10), web3.toWei(1, "ether").toString(10));
     });
 });
