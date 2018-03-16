@@ -231,9 +231,9 @@ contract AnonymousVoteSelling {
             temp3 = Secp256k1._mul(proof.votesParams[i*2+1], temp1);
             if (yesVote) {
                 uint[2] memory temp_affine1 = [G[0], pp - G[1]];
-                temp4 = Secp256k1._addMixed([temp2[i*2], temp2[i*2+1], 1], temp_affine1);
+                temp4 = Secp256k1._addMixed([temp2[0], temp2[1], 1], temp_affine1);
                 ECCMath.toZ1(temp4, pp);
-                temp4 = Secp256k1._add(temp3, Secp256k1._mul(proof.votesParams[i*2+1], [temp4[0], temp4[1]]));
+                temp4 = Secp256k1._add(temp3, Secp256k1._mul(proof.votesParams[i*2], [temp4[0], temp4[1]]));
             } else {
                 temp4 = Secp256k1._add(temp3, Secp256k1._mul(proof.votesParams[i*2], temp2));
             }
@@ -247,12 +247,12 @@ contract AnonymousVoteSelling {
         return true;
     }
 
-    function collectReward () {
+    function collectReward (address receiver) {
         Proof proof = proofs[msg.sender];
         require(proof.completedPublicKeysProofSteps == n);
         require(proof.completedVotesProofSteps == n);
         require(!collected[sha256(proof.xH)]);
         collected[sha256(proof.xH)] = true;
-        msg.sender.transfer(reward);
+        receiver.transfer(reward);
     }
 }
