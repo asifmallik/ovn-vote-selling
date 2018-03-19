@@ -1,2 +1,3 @@
 build
 contracts/.node*
+node_modules
