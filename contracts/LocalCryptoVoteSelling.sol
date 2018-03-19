@@ -17,7 +17,7 @@ contract LocalCryptoVoteSelling {
     // Modulus for private keys (sub-group)
     uint constant nn = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
 
-    uint[2] G;
+    uint[2] public G;
 
     function LocalCryptoVoteSelling() {
         G[0] = Gx;
@@ -25,7 +25,7 @@ contract LocalCryptoVoteSelling {
     }
 
     // a - b = c;
-    function submod(uint a, uint b) returns (uint){
+    function submod(uint a, uint b) constant returns (uint){
         uint a_nn;
 
         if(a>b) {
@@ -49,7 +49,7 @@ contract LocalCryptoVoteSelling {
     } */
 
 
-    function multiply(uint[2] H, uint x) returns (uint[2]) {
+    function multiply(uint[2] H, uint x) constant returns (uint[2]) {
         uint[3] memory xH = Secp256k1._mul(x, H);
 
         // Convert to Affine Co-ordinates
