@@ -58,77 +58,49 @@ contract LocalCryptoVoteSelling {
         return [xH[0], xH[1]];
     }
 
-    function createZKPPublicKeys(uint[] publicKeys, uint[] params, uint w, uint x, uint[2] y, uint[2] H, uint proverIndex) returns (uint[2], uint[], uint[]) {
-        uint[] memory bases = new uint[](publicKeys.length);
-        for(uint i = 0; i < publicKeys.length/2; i++) {
-            bases[i*2] = G[0];
-            bases[i*2+1] = G[1];
-        }
-        uint[] memory res = computeIndividualZKPs(bases, publicKeys, params, w, y, H, proverIndex);
-        return computeORZKP(params, res, w, x, y, H, proverIndex);
-    }
-
-    function createZKPVotes (uint[] recomputedBases, uint[] votes, uint[] params, uint w, uint x, uint[2] y, uint[2] H, uint proverIndex, bool yesVote) returns (uint[2], uint[], uint[]) {
-        uint[] memory res;
-        if (yesVote) {
-            res = computeIndividualZKPs(recomputedBases, computePublicKeysFromYesVotes(votes), params, w, y, H, proverIndex);
-        } else {
-            res = computeIndividualZKPs(recomputedBases, votes, params, w, y, H, proverIndex);
-        }
-        return computeORZKP(params, res, w, x, y, H, proverIndex);
-    }
-
-    function computePublicKeysFromYesVotes (uint[] votes) returns (uint[]) {
+    function computePublicKeyFromYesVote (uint[2] vote) constant returns (uint[2]) {
         // Negate the 'y' co-ordinate of G
         uint[3] memory temp1;
         uint[2] memory temp_affine1 = [G[0], pp - G[1]];
 
-        for (uint i = 0; i < votes.length/2; i++) {
-            temp1 = Secp256k1._addMixed([votes[i*2], votes[i*2+1], 1], temp_affine1);
-            ECCMath.toZ1(temp1, pp);
-            votes[i*2] = temp1[0];
-            votes[i*2+1] = temp1[1];
-        }
-        return votes;
+        temp1 = Secp256k1._addMixed([vote[0], vote[1], 1], temp_affine1);
+        ECCMath.toZ1(temp1, pp);
+        return [temp1[0], temp1[1]];
     }
 
-    function computeIndividualZKPs (uint[] bases, uint[] publicKeys, uint[] params, uint w, uint[2] y, uint[2] H, uint proverIndex) returns (uint[]) {
-        uint[] memory res = new uint[](publicKeys.length*2);
+    function computeIndividualRealZKP (uint[2] base, uint[2] publicKey, uint w, uint[2] H) constant returns (uint[4] res) {
         uint[3] memory temp1;
+        temp1 = Secp256k1._mul(w, H);
+        ECCMath.toZ1(temp1, pp);
 
-        for (uint i = 0; i < params.length/2; i++) {
-            if (i == proverIndex) {
-                temp1 = Secp256k1._mul(w, H);
-                ECCMath.toZ1(temp1, pp);
+        res[0] = temp1[0];
+        res[1] = temp1[1];
 
-                res[i*4] = temp1[0];
-                res[i*4+1] = temp1[1];
+        temp1 = Secp256k1._mul(w, [base[0], base[1]]);
+        ECCMath.toZ1(temp1, pp);
 
-                temp1 = Secp256k1._mul(w, [bases[i*2], bases[i*2+1]]);
-                ECCMath.toZ1(temp1, pp);
-
-                res[i*4+2] = temp1[0];
-                res[i*4+3] = temp1[1];
-            } else {
-                temp1 = Secp256k1._mul(params[i*2+1], H);
-                temp1 = Secp256k1._add(temp1, Secp256k1._mul(params[i*2], y));
-                ECCMath.toZ1(temp1, pp);
-
-                res[i*4] = temp1[0];
-                res[i*4+1] = temp1[1];
-
-                temp1 = Secp256k1._mul(params[i*2+1], [bases[i*2], bases[i*2+1]]);
-                temp1 = Secp256k1._add(temp1, Secp256k1._mul(params[i*2], [publicKeys[i*2], publicKeys[i*2+1]]));
-                ECCMath.toZ1(temp1, pp);
-
-                res[i*4+2] = temp1[0];
-                res[i*4+3] = temp1[1];
-            }
-        }
-        return res;
+        res[2] = temp1[0];
+        res[3] = temp1[1];
     }
 
-    function computeORZKP (uint[] params, uint[] res, uint w, uint x, uint[2] y, uint[2] H, uint proverIndex) returns (uint[2], uint[], uint[]) {
+    function computeIndividualFakeZKP (uint[2] base, uint[2] publicKey, uint[2] params, uint[2] y, uint[2] H) constant returns (uint[4] res) {
+        uint[3] memory temp1;
+        temp1 = Secp256k1._mul(params[1], H);
+        temp1 = Secp256k1._add(temp1, Secp256k1._mul(params[0], y));
+        ECCMath.toZ1(temp1, pp);
+
+        res[0] = temp1[0];
+        res[1] = temp1[1];
+
+        temp1 = Secp256k1._mul(params[1], [base[0], base[1]]);
+        temp1 = Secp256k1._add(temp1, Secp256k1._mul(params[0], [publicKey[0], publicKey[1]]));
+        ECCMath.toZ1(temp1, pp);
+
+        res[2] = temp1[0];
+        res[3] = temp1[1];
+    }
+
+    function computeORZKP (uint[] params, uint[] res, uint w, uint x, uint[2] y, uint[2] H, uint proverIndex) constant returns (uint[2], uint[], uint[]) {
         uint dSum;
 
         for(uint i = 0; i < params.length/2; i++) {

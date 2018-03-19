@@ -93,30 +93,57 @@ let getCurrentBlock = () => {
 let generatePublicKeysZKP = async (voters, localCryptoVoteSelling, H, voterIndex, sender) => {
     let publicKeys = [];
     let params = [];
-    for(let i = 0; i < voters.length; i++) {
-        publicKeys.push(voters[i].xG[0].toString(10));
-        publicKeys.push(voters[i].xG[1].toString(10));
-        params.push(ec.genKeyPair().priv.toString());
-        params.push(ec.genKeyPair().priv.toString());
-    }
     let y = await localCryptoVoteSelling.multiply.call(H, voters[voterIndex].x);
-    return await localCryptoVoteSelling.createZKPPublicKeys.call(publicKeys, params, ec.genKeyPair().priv.toString(), voters[voterIndex].x, y, H, voterIndex, {from: sender});
+    let G = [await localCryptoVoteSelling.G(0), await localCryptoVoteSelling.G(1)];
+    let res = [];
+    let w = ec.genKeyPair().priv.toString();
+    for(let i = 0; i < voters.length; i++) {
+        let tempRes;
+        if (i == voterIndex) {
+            tempRes = await localCryptoVoteSelling.computeIndividualRealZKP(G, [voters[i].xG[0], voters[i].xG[1]], w, H);
+            params.push(0);
+            params.push(0);
+        } else {
+            params.push(ec.genKeyPair().priv.toString());
+            params.push(ec.genKeyPair().priv.toString());
+            tempRes = await localCryptoVoteSelling.computeIndividualFakeZKP(G, [voters[i].xG[0], voters[i].xG[1]], [params[i*2], params[i*2+1]], y, H);
+        }
+        res.push(tempRes[0]);
+        res.push(tempRes[1]);
+        res.push(tempRes[2]);
+        res.push(tempRes[3]);
+    }
+    return await localCryptoVoteSelling.computeORZKP.call(params, res, w, voters[voterIndex].x, y, H, voterIndex, {from: sender});
 }
 
 let generateVoteZKP = async (voters, localCryptoVoteSelling, H, voterIndex, voteOption, sender) => {
-    let votes = [];
     let recomputedBases = [];
     let params = [];
-    for(let i = 0; i < voters.length; i++) {
-        recomputedBases.push(voters[i].reconstructedKey[0].toString(10))
-        recomputedBases.push(voters[i].reconstructedKey[1].toString(10))
-        votes.push(voters[i].vote[0].toString(10));
-        votes.push(voters[i].vote[1].toString(10));
-        params.push(ec.genKeyPair().priv.toString());
-        params.push(ec.genKeyPair().priv.toString());
-    }
+    let res = [];
+    let w = ec.genKeyPair().priv.toString();
     let y = await localCryptoVoteSelling.multiply.call(H, voters[voterIndex].x);
-    return await localCryptoVoteSelling.createZKPVotes.call(recomputedBases, votes, params, ec.genKeyPair().priv.toString(), voters[voterIndex].x, y, H, voterIndex, voteOption, {from: sender});
+    for(let i = 0; i < voters.length; i++) {
+        let tempRes, publicKey;
+        if (voteOption) {
+            publicKey = await localCryptoVoteSelling.computePublicKeyFromYesVote.call([voters[i].vote[0], voters[i].vote[1]]);
+        } else {
+            publicKey = [voters[i].vote[0], voters[i].vote[1]];
+        }
+        if (i == voterIndex) {
+            tempRes = await localCryptoVoteSelling.computeIndividualRealZKP.call([voters[i].reconstructedKey[0], voters[i].reconstructedKey[1]], publicKey, w, H);
+            params.push(0);
+            params.push(0);
+        } else {
+            params.push(ec.genKeyPair().priv.toString());
+            params.push(ec.genKeyPair().priv.toString());
+            tempRes = await localCryptoVoteSelling.computeIndividualFakeZKP.call([voters[i].reconstructedKey[0], voters[i].reconstructedKey[1]], publicKey, [params[i*2], params[i*2+1]], y, H);
+        }
+        res.push(tempRes[0]);
+        res.push(tempRes[1]);
+        res.push(tempRes[2]);
+        res.push(tempRes[3]);
+    }
+    return await localCryptoVoteSelling.computeORZKP.call(params, res, w, voters[voterIndex].x, y, H, voterIndex, {from: sender});
 };
 
 let getBalance = (account) => {
@@ -130,8 +157,6 @@ let getBalance = (account) => {
         });
     });
 };
-
-
 
 module.exports = {
     advanceBlock, increaseTime, getCurrentBlock, generateVoters, populateRecomputedKeys, generatePublicKeysZKP, generateVoteZKP, getBalance
