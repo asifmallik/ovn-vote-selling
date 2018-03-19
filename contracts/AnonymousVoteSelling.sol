@@ -52,7 +52,11 @@ contract AnonymousVoteSelling {
         uint state = uint(anonymousVoting.state());
         require(state > 1);
         if (state == 4) {
-            require(msg.value == reward * anonymousVoting.finaltally(0));
+            if (yesVote) {
+                require(msg.value == reward * anonymousVoting.finaltally(0));
+            } else {
+                require(msg.value == reward * (n - anonymousVoting.finaltally(0)));
+            }
         } else {
             require(msg.value == reward * n);
         }
