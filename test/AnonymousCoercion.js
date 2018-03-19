@@ -36,7 +36,7 @@ contract("AnonymousVoteSelling", (accounts) => {
     before(async () => {
         localCrypto = await LocalCrypto.deployed();
         anonymousVoting = await AnonymousVoting.deployed();
-        let n = 4;
+        let n = 5;
         voters = await utils.generateVoters(accounts, n, localCrypto);
         await anonymousVoting.setEligible(voters.map(voter => voter.address));
         let gap = 3600;
@@ -64,16 +64,17 @@ contract("AnonymousVoteSelling", (accounts) => {
     });
 
     it("should be able to verify no votes", async () => {
-        anonymousVoteSelling = await AnonymousVoteSelling.new(AnonymousVoting.address, false, "1000000000000000000", 13, false, {value: "2000000000000000000"});
+        anonymousVoteSelling = await AnonymousVoteSelling.new(AnonymousVoting.address, false, "1000000000000000000", 13, false, 0, 0, {value: "3000000000000000000"});
         var H = [(await anonymousVoteSelling.H(0)).toString(10), (await anonymousVoteSelling.H(1)).toString(10)];
         let [y, res, params] = await utils.generatePublicKeysZKP(voters, localCryptoVoteSelling, H, 0, accounts[9]);
         console.log(await anonymousVoteSelling.submitPublicKeysProof(y, params, res, {from: accounts[9]}));
         console.log(await anonymousVoteSelling.verifyPublicKeysProof(3, {from: accounts[9]}));
-        console.log(await anonymousVoteSelling.verifyPublicKeysProof(1, {from: accounts[9]}));
+        console.log(await anonymousVoteSelling.verifyPublicKeysProof(2, {from: accounts[9]}));
         [y, res, params] = await utils.generateVoteZKP(voters, localCryptoVoteSelling, H, 0, false, accounts[9]);
         console.log(await anonymousVoteSelling.submitVoteProof(params, res, {from: accounts[9]}));
         console.log(await anonymousVoteSelling.verifyVoteProof(3, {from: accounts[9]}));
-        console.log(await anonymousVoteSelling.verifyVoteProof(1, {from: accounts[9]}));
+        console.log(await anonymousVoteSelling.verifyVoteProof.call(2, {from: accounts[9]}));
+        console.log(await anonymousVoteSelling.verifyVoteProof(2, {from: accounts[9]}));
         let initialBalance = await utils.getBalance(accounts[8]);
         await anonymousVoteSelling.collectReward(accounts[8], {from: accounts[9]});
         let finalBalance = await utils.getBalance(accounts[8]);
@@ -81,19 +82,23 @@ contract("AnonymousVoteSelling", (accounts) => {
     });
 
     it("should be able to verify yes votes", async () => {
-        anonymousVoteSelling = await AnonymousVoteSelling.new(AnonymousVoting.address, false, "1000000000000000000", 13, true, {value: "2000000000000000000"});
+        anonymousVoteSelling = await AnonymousVoteSelling.new(AnonymousVoting.address, false, "1000000000000000000", 13, true, 0, 0, {value: "2000000000000000000"});
         var H = [(await anonymousVoteSelling.H(0)).toString(10), (await anonymousVoteSelling.H(1)).toString(10)];
         let [y, res, params] = await utils.generatePublicKeysZKP(voters, localCryptoVoteSelling, H, 1, accounts[9]);
         console.log(await anonymousVoteSelling.submitPublicKeysProof(y, params, res, {from: accounts[9]}));
         console.log(await anonymousVoteSelling.verifyPublicKeysProof(3, {from: accounts[9]}));
-        console.log(await anonymousVoteSelling.verifyPublicKeysProof(1, {from: accounts[9]}));
+        console.log(await anonymousVoteSelling.verifyPublicKeysProof(2, {from: accounts[9]}));
         [y, res, params] = await utils.generateVoteZKP(voters, localCryptoVoteSelling, H, 1, true, accounts[9]);
         console.log(await anonymousVoteSelling.submitVoteProof(params, res, {from: accounts[9]}));
         console.log(await anonymousVoteSelling.verifyVoteProof(3, {from: accounts[9]}));
-        console.log(await anonymousVoteSelling.verifyVoteProof(1, {from: accounts[9]}));
+        console.log(await anonymousVoteSelling.verifyVoteProof(2, {from: accounts[9]}));
         let initialBalance = await utils.getBalance(accounts[8]);
         await anonymousVoteSelling.collectReward(accounts[8], {from: accounts[9]});
         let finalBalance = await utils.getBalance(accounts[8]);
         assert.equal(finalBalance.minus(initialBalance).toString(10), web3.toWei(1, "ether").toString(10));
+    });
+
+    it("should allow offchain verification", async () => {
+
     });
 });
