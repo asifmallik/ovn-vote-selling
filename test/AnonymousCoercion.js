@@ -32,11 +32,11 @@ let utils = require("./utils");
 });*/
 
 contract("AnonymousVoteSelling", (accounts) => {
-    let anonymousVoting, anonymousVoteSelling, localCrypto, localCryptoVoteSelling, voters;
+    let anonymousVoting, anonymousVoteSelling, localCrypto, localCryptoVoteSelling, voters, n;
     before(async () => {
         localCrypto = await LocalCrypto.deployed();
         anonymousVoting = await AnonymousVoting.deployed();
-        let n = 5;
+        n = 5;
         voters = await utils.generateVoters(accounts, n, localCrypto);
         await anonymousVoting.setEligible(voters.map(voter => voter.address));
         let gap = 3600;
@@ -64,7 +64,7 @@ contract("AnonymousVoteSelling", (accounts) => {
     });
 
     it("should be able to verify no votes", async () => {
-        anonymousVoteSelling = await AnonymousVoteSelling.new(AnonymousVoting.address, false, "1000000000000000000", 13, false, 0, 0, {value: "3000000000000000000"});
+        anonymousVoteSelling = await AnonymousVoteSelling.new(AnonymousVoting.address, true, "1000000000000000000", 13, false, 0, 0, {value: "3000000000000000000"});
         var H = [(await anonymousVoteSelling.H(0)).toString(10), (await anonymousVoteSelling.H(1)).toString(10)];
         let [y, res, params] = await utils.generatePublicKeysZKP(voters, localCryptoVoteSelling, H, 0, accounts[9]);
         console.log(await anonymousVoteSelling.submitPublicKeysProof(y, params, res, {from: accounts[9]}));
@@ -82,7 +82,7 @@ contract("AnonymousVoteSelling", (accounts) => {
     });
 
     it("should be able to verify yes votes", async () => {
-        anonymousVoteSelling = await AnonymousVoteSelling.new(AnonymousVoting.address, false, "1000000000000000000", 13, true, 0, 0, {value: "2000000000000000000"});
+        anonymousVoteSelling = await AnonymousVoteSelling.new(AnonymousVoting.address, true, "1000000000000000000", 13, true, 0, 0, {value: "2000000000000000000"});
         var H = [(await anonymousVoteSelling.H(0)).toString(10), (await anonymousVoteSelling.H(1)).toString(10)];
         let [y, res, params] = await utils.generatePublicKeysZKP(voters, localCryptoVoteSelling, H, 1, accounts[9]);
         console.log(await anonymousVoteSelling.submitPublicKeysProof(y, params, res, {from: accounts[9]}));
@@ -98,7 +98,55 @@ contract("AnonymousVoteSelling", (accounts) => {
         assert.equal(finalBalance.minus(initialBalance).toString(10), web3.toWei(1, "ether").toString(10));
     });
 
-    it("should allow offchain verification", async () => {
+    context('offchain verification', () => {
+        let H, accountIndex = 9;
+        beforeEach(async () => {
+            accountIndex++;
+            anonymousVoteSelling = await AnonymousVoteSelling.new(AnonymousVoting.address, false, "1000000000000000000", 13, true, "1000000000000000000", 3600, {value: "2000000000000000000"});
+            H = [(await anonymousVoteSelling.H(0)).toString(10), (await anonymousVoteSelling.H(1)).toString(10)];
+        });
 
+        context('correct proofs', () => {
+            beforeEach(async () => {
+                let [y, res, params] = await utils.generatePublicKeysZKP(voters, localCryptoVoteSelling, H, 1, accounts[accountIndex]);
+                console.log(await anonymousVoteSelling.submitPublicKeysProof(y, params, res, {from: accounts[accountIndex]}));
+                [y, res, params] = await utils.generateVoteZKP(voters, localCryptoVoteSelling, H, 1, true, accounts[accountIndex]);
+                console.log(await anonymousVoteSelling.submitVoteProof(params, res, {from: accounts[accountIndex], value: web3.toWei(1, "ether").toString(10)}));
+            });
+
+            it("should not release reward before dispute time is over", async () => {
+                await utils.increaseTime(1800);
+                await utils.advanceBlock();
+                await utils.expectThrow(anonymousVoteSelling.collectReward(accounts[8], {from: accounts[accountIndex]}));
+            });
+
+            it("should release reward if not challenged", async () => {
+                await utils.increaseTime(3600);
+                await utils.advanceBlock();
+                let initialBalance = await utils.getBalance(accounts[8]);
+                console.log(await anonymousVoteSelling.collectReward(accounts[8], {from: accounts[accountIndex]}));
+                let finalBalance = await utils.getBalance(accounts[8]);
+                assert.equal(finalBalance.minus(initialBalance).toString(10), web3.toWei(2, "ether").toString(10));
+            });
+
+            it("all disprove should return false", async () => {
+                assert.equal(await anonymousVoteSelling.disprovePublicKeysProofC.call(accounts[accountIndex]), false, "Public Key Proof C is disproven");
+                assert.equal(await anonymousVoteSelling.disproveVoteProofC.call(accounts[accountIndex]), false, "Vote Proof C is disproven");
+                for(var i = 0; i < n; i++) {
+                    assert.equal(await anonymousVoteSelling.disprovePublicKeysProofA.call(accounts[accountIndex], i), false, "Public Key Proof A is disproven");
+                    assert.equal(await anonymousVoteSelling.disprovePublicKeysProofB.call(accounts[accountIndex], i), false, "Public Key Proof B is disproven");
+                    assert.equal(await anonymousVoteSelling.disproveVoteProofA.call(accounts[accountIndex], i), false, "Vote Proof A is disproven");
+                    assert.equal(await anonymousVoteSelling.disproveVoteProofB.call(accounts[accountIndex], i), false, "Vote Proof B is disproven");
+                }
+            });
+        });
+
+        it('should return true when public key proof A is false', () => {
+            let [y, res, params] = await utils.generatePublicKeysZKP(voters, localCryptoVoteSelling, H, 1, accounts[accountIndex]);
+            console.log(await anonymousVoteSelling.submitPublicKeysProof(y, params, res, {from: accounts[accountIndex]}));
+            [y, res, params] = await utils.generateVoteZKP(voters, localCryptoVoteSelling, H, 1, true, accounts[accountIndex]);
+            console.log(await anonymousVoteSelling.submitVoteProof(params, res, {from: accounts[accountIndex], value: web3.toWei(1, "ether").toString(10)}));
+        });
     });
+
 });

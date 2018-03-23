@@ -158,6 +158,20 @@ let getBalance = (account) => {
     });
 };
 
+let expectThrow = async (promise) => {
+    try {
+        await promise;
+    } catch (error) {
+        let revert = error.message.search("revert") >= 0;
+        let invalidOpcode = error.message.search("invalid opcode") >= 0;
+        let outOfGas = error.message.search("out of gas") >= 0;
+        assert(revert || invalidOpcode || outOfGas, "Expected throw but got: " + error);
+        return;
+    }
+    assert(false, "Expected throw not received");
+}
+
+
 module.exports = {
-    advanceBlock, increaseTime, getCurrentBlock, generateVoters, populateRecomputedKeys, generatePublicKeysZKP, generateVoteZKP, getBalance
+    advanceBlock, increaseTime, getCurrentBlock, generateVoters, populateRecomputedKeys, generatePublicKeysZKP, generateVoteZKP, getBalance, expectThrow
 }

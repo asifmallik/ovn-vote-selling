@@ -9,6 +9,8 @@ contract AnonymousVoteSelling {
     uint n;
     uint deadline;
     uint reward;
+    uint deposit;
+    uint disputeTime;
 
     // Modulus for public keys
     uint constant pp = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
@@ -26,6 +28,7 @@ contract AnonymousVoteSelling {
     struct Proof {
         uint[2] xH;
         uint completedPublicKeysProofSteps;
+        uint timestamp;
         uint completedVotesProofSteps;
         uint[] publicKeysParams;
         uint[] publicKeysRes;
@@ -36,14 +39,17 @@ contract AnonymousVoteSelling {
 
     mapping (address => Proof) proofs;
     mapping (bytes32 => bool) collected;
+    address[] claims;
 
-    function AnonymousVoteSelling (address _anonymousVoting, bool _onchainVerification, uint _reward, uint _deadline, bool _yesVote) payable {
+    function AnonymousVoteSelling (address _anonymousVoting, bool _onchainVerification, uint _reward, uint _deadline, bool _yesVote, uint _deposit, uint _disputeTime) payable {
         anonymousVoting = AnonymousVoting(_anonymousVoting);
         reward = _reward;
         deadline = _deadline;
         onchainVerification = _onchainVerification;
         n = anonymousVoting.totalregistered();
         yesVote = _yesVote;
+        deposit = _deposit;
+        disputeTime = _disputeTime;
         H = mapToCurve(uint(sha256(this, _anonymousVoting)));
         /* require(Secp256k1.isPubKey(H)); */
         G[0] = Gx;
@@ -62,7 +68,7 @@ contract AnonymousVoteSelling {
         }
     }
 
-    function legendreSymbol(uint a, uint p) returns (int) {
+    function legendreSymbol (uint a, uint p) returns (int) {
         uint ls = ECCMath.expmod(a, (p - 1) / 2, p);
         if (ls == p - 1) {
             return -1;
@@ -71,7 +77,7 @@ contract AnonymousVoteSelling {
         }
     }
 
-    function sqrtmod(uint a, uint p) returns (uint) {
+    function sqrtmod (uint a, uint p) returns (uint) {
         if (legendreSymbol(a, p) != 1) {
             return 0;
         } else if (a == 0) {
@@ -118,7 +124,7 @@ contract AnonymousVoteSelling {
         }
     }
 
-    function mapToCurve(uint x) returns (uint[2]) {
+    function mapToCurve (uint x) returns (uint[2]) {
         x -= 1;
         uint y;
         uint f_x;
@@ -142,11 +148,20 @@ contract AnonymousVoteSelling {
         proofs[msg.sender].publicKeysRes = res;
     }
 
-    function submitVoteProof (uint[] params, uint[] res) {
+    function get() returns (uint[2], uint[], uint[]) {
+        return (proofs[msg.sender].xH, proofs[msg.sender].publicKeysParams, proofs[msg.sender].publicKeysRes);
+    }
+
+    function submitVoteProof (uint[] params, uint[] res) payable {
         require(proofs[msg.sender].publicKeysParams.length > 0);
         require(params.length == n*2 && res.length == n*4);
         require(proofs[msg.sender].votesParams.length == 0);
+        if (!onchainVerification) {
+            require(msg.value == deposit);
+            claims.push(msg.sender);
+        }
 
+        proofs[msg.sender].timestamp = now;
         proofs[msg.sender].votesParams = params;
         proofs[msg.sender].votesRes = res;
     }
@@ -154,7 +169,8 @@ contract AnonymousVoteSelling {
     function verifyPublicKeysProof (uint numSteps) returns (bool) {
         Proof storage proof = proofs[msg.sender];
         require(proof.publicKeysParams.length > 0);
-        /* require(numSteps > 0); */
+        require(numSteps > 0);
+        require(onchainVerification);
         require(!proof.faulty);
 
         uint[2] memory temp1;
@@ -201,6 +217,7 @@ contract AnonymousVoteSelling {
         Proof storage proof = proofs[msg.sender];
         require(proof.votesParams.length > 0);
         require(numSteps > 0);
+        require(onchainVerification);
         require(!proof.faulty);
 
         uint[2] memory temp1;
@@ -251,12 +268,138 @@ contract AnonymousVoteSelling {
         return true;
     }
 
+    function disprove (address prover, uint proofType, uint step, address receiver) {
+        Proof storage proof = proofs[prover];
+        require(!onchainVerification);
+        require(now < proof.timestamp + disputeTime);
+        require(proof.votesParams.length > 0);
+        require(!proof.faulty);
+        bool disproven;
+        if (proofType == 0) {
+            disproven = disprovePublicKeysProofA(prover, step);
+        } else if (proofType == 1) {
+            disproven = disprovePublicKeysProofB(prover, step);
+        } else if (proofType == 2) {
+            disproven = disprovePublicKeysProofC(prover);
+        } else if (proofType == 3) {
+            disproven = disproveVoteProofA(prover, step);
+        } else if (proofType == 4) {
+            disproven = disproveVoteProofB(prover, step);
+        } else if (proofType == 5) {
+            disproven = disproveVoteProofC(prover);
+        }
+
+        require(disproven);
+        proof.faulty = true;
+        receiver.send(deposit);
+    }
+
+    function disprovePublicKeysProofA (address prover, uint step) returns (bool) {
+        Proof storage proof = proofs[prover];
+        uint[3] memory temp1;
+        uint[3] memory temp2;
+        temp1 = Secp256k1._mul(proof.publicKeysParams[step*2], proof.xH);
+        temp2 = Secp256k1._add(temp1, Secp256k1._mul(proof.publicKeysParams[step*2+1], H));
+        ECCMath.toZ1(temp2, pp);
+        if (proof.publicKeysRes[step*4] != temp2[0] || proof.publicKeysRes[step*4+1] != temp2[1]) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function disprovePublicKeysProofB (address prover, uint step) returns (bool) {
+        Proof storage proof = proofs[prover];
+        uint[2] memory temp1;
+        uint[3] memory temp2;
+        uint[3] memory temp3;
+        (temp1,,) = anonymousVoting.getVoterById(step);
+        temp2 = Secp256k1._mul(proof.publicKeysParams[step*2], temp1);
+        temp3 = Secp256k1._add(temp2, Secp256k1._mul(proof.publicKeysParams[step*2+1], G));
+        ECCMath.toZ1(temp3, pp);
+        if (proof.publicKeysRes[step*4+2] != temp3[0] || proof.publicKeysRes[step*4+3] != temp3[1]) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function disprovePublicKeysProofC (address prover) returns (bool) {
+        Proof storage proof = proofs[prover];
+        uint _c;
+        for (uint i = 0; i < n; i++) {
+            _c = addmod(_c, proof.publicKeysParams[i*2], nn);
+        }
+        if (_c != uint(sha256(prover, H, proof.xH, proof.publicKeysRes))) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function disproveVoteProofA (address prover, uint step) returns (bool) {
+        Proof storage proof = proofs[prover];
+        uint[3] memory temp1;
+        uint[3] memory temp2;
+        temp1 = Secp256k1._mul(proof.votesParams[step*2], proof.xH);
+        temp2 = Secp256k1._add(temp1, Secp256k1._mul(proof.votesParams[step*2+1], H));
+        ECCMath.toZ1(temp2, pp);
+        if (proof.votesRes[step*4] != temp2[0] || proof.votesRes[step*4+1] != temp2[1]) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function disproveVoteProofB (address prover, uint step) returns (bool) {
+        Proof storage proof = proofs[prover];
+        uint[2] memory temp1;
+        uint[2] memory temp2;
+        uint[3] memory temp3;
+        uint[3] memory temp4;
+        (,temp1,temp2) = anonymousVoting.getVoterById(step); //temp1 = reconstructed, temp2 = vote
+        temp3 = Secp256k1._mul(proof.votesParams[step*2+1], temp1);
+        if (yesVote) {
+            uint[2] memory temp_affine1 = [G[0], pp - G[1]];
+            temp4 = Secp256k1._addMixed([temp2[0], temp2[1], 1], temp_affine1);
+            ECCMath.toZ1(temp4, pp);
+            temp4 = Secp256k1._add(temp3, Secp256k1._mul(proof.votesParams[step*2], [temp4[0], temp4[1]]));
+        } else {
+            temp4 = Secp256k1._add(temp3, Secp256k1._mul(proof.votesParams[step*2], temp2));
+        }
+        ECCMath.toZ1(temp4, pp);
+        if (proof.votesRes[step*4+2] != temp4[0] || proof.votesRes[step*4+3] != temp4[1]) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function disproveVoteProofC (address prover) returns (bool) {
+        Proof storage proof = proofs[prover];
+        uint _c;
+        for (uint i = 0; i < n; i++) {
+            _c = addmod(_c, proof.votesParams[i*2], nn);
+        }
+        if (_c != uint(sha256(prover, H, proof.xH, proof.votesRes))) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     function collectReward (address receiver) {
         Proof proof = proofs[msg.sender];
-        require(proof.completedPublicKeysProofSteps == n);
-        require(proof.completedVotesProofSteps == n);
         require(!collected[sha256(proof.xH)]);
+        if (onchainVerification) {
+            require(proof.completedPublicKeysProofSteps == n);
+            require(proof.completedVotesProofSteps == n);
+        } else {
+            require(!proof.faulty);
+            require(proof.votesParams.length > 0);
+            require(disputeTime + proof.timestamp < now);
+        }
         collected[sha256(proof.xH)] = true;
-        receiver.transfer(reward);
+        receiver.send(reward + deposit);
     }
 }
