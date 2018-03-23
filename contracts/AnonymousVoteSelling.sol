@@ -268,7 +268,7 @@ contract AnonymousVoteSelling {
         return true;
     }
 
-    function disprove (address prover, uint proofType, uint step, address receiver) {
+    function disprove (address prover, address receiver, uint proofType, uint step) {
         Proof storage proof = proofs[prover];
         require(!onchainVerification);
         require(now < proof.timestamp + disputeTime);

@@ -141,11 +141,30 @@ contract("AnonymousVoteSelling", (accounts) => {
             });
         });
 
-        it('should return true when public key proof A is false', () => {
+        it('should return true when public key proof is false', async () => {
             let [y, res, params] = await utils.generatePublicKeysZKP(voters, localCryptoVoteSelling, H, 1, accounts[accountIndex]);
+            params[0] = 233412;
             console.log(await anonymousVoteSelling.submitPublicKeysProof(y, params, res, {from: accounts[accountIndex]}));
             [y, res, params] = await utils.generateVoteZKP(voters, localCryptoVoteSelling, H, 1, true, accounts[accountIndex]);
             console.log(await anonymousVoteSelling.submitVoteProof(params, res, {from: accounts[accountIndex], value: web3.toWei(1, "ether").toString(10)}));
+            assert.equal(await anonymousVoteSelling.disprovePublicKeysProofA.call(accounts[accountIndex], 0), true, "Public Key Proof A is proven true");
+            assert.equal(await anonymousVoteSelling.disprovePublicKeysProofB.call(accounts[accountIndex], 0), true, "Public Key Proof B is proven true");
+            assert.equal(await anonymousVoteSelling.disprovePublicKeysProofC.call(accounts[accountIndex]), true, "Public Key Proof C is proven true");
+            let initialBalance = await utils.getBalance(accounts[8]);
+            console.log(await anonymousVoteSelling.disprove(accounts[accountIndex]), accounts[8] 0, 0));
+            let finalBalance = await utils.getBalance(accounts[8]);
+            assert.equal(finalBalance.minus(initialBalance).toString(10), web3.toWei(2, "ether").toString(10));
+        });
+
+        it('should return true when vote proof is false', async () => {
+            let [y, res, params] = await utils.generatePublicKeysZKP(voters, localCryptoVoteSelling, H, 1, accounts[accountIndex]);
+            console.log(await anonymousVoteSelling.submitPublicKeysProof(y, params, res, {from: accounts[accountIndex]}));
+            [y, res, params] = await utils.generateVoteZKP(voters, localCryptoVoteSelling, H, 1, true, accounts[accountIndex]);
+            params[0] = 233412;
+            console.log(await anonymousVoteSelling.submitVoteProof(params, res, {from: accounts[accountIndex], value: web3.toWei(1, "ether").toString(10)}));
+            assert.equal(await anonymousVoteSelling.disproveVoteProofA.call(accounts[accountIndex], 0), true, "Vote Proof A is proven true");
+            assert.equal(await anonymousVoteSelling.disproveVoteProofB.call(accounts[accountIndex], 0), true, "Vote Proof B is proven true");
+            assert.equal(await anonymousVoteSelling.disproveVoteProofC.call(accounts[accountIndex]), true, "Vote Proof C is proven true");
         });
     });
 
