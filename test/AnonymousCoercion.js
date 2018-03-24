@@ -151,9 +151,12 @@ contract("AnonymousVoteSelling", (accounts) => {
             assert.equal(await anonymousVoteSelling.disprovePublicKeysProofB.call(accounts[accountIndex], 0), true, "Public Key Proof B is proven true");
             assert.equal(await anonymousVoteSelling.disprovePublicKeysProofC.call(accounts[accountIndex]), true, "Public Key Proof C is proven true");
             let initialBalance = await utils.getBalance(accounts[8]);
-            console.log(await anonymousVoteSelling.disprove(accounts[accountIndex]), accounts[8] 0, 0));
+            console.log(await anonymousVoteSelling.disprove(accounts[accountIndex], accounts[8], 0, 0));
             let finalBalance = await utils.getBalance(accounts[8]);
-            assert.equal(finalBalance.minus(initialBalance).toString(10), web3.toWei(2, "ether").toString(10));
+            assert.equal(finalBalance.minus(initialBalance).toString(10), web3.toWei(1, "ether").toString(10));
+            await utils.increaseTime(3600);
+            await utils.advanceBlock();
+            await utils.expectThrow(anonymousVoteSelling.collectReward(accounts[8], {from: accounts[accountIndex]}));
         });
 
         it('should return true when vote proof is false', async () => {
