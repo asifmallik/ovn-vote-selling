@@ -142,6 +142,7 @@ contract AnonymousVoteSelling {
     function submitPublicKeysProof (uint[2] y, uint[] params, uint[] res) {
         require(params.length == n*2 && res.length == n*4);
         require(proofs[msg.sender].publicKeysParams.length == 0);
+        require(Secp256k1.onCurve(y));
 
         proofs[msg.sender].xH = y;
         proofs[msg.sender].publicKeysParams = params;
