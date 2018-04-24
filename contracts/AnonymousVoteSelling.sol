@@ -398,7 +398,7 @@ contract AnonymousVoteSelling {
         } else {
             require(!proof.faulty);
             require(proof.votesParams.length > 0);
-            require(disputeTime + proof.timestamp < now);
+            require(disputeTime + proof.timestamp <= now);
         }
         collected[sha256(proof.xH)] = true;
         receiver.send(reward + deposit);
