@@ -4,7 +4,7 @@ let utils = require("./utils");
 let accounts = web3.eth.accounts;
 let fs = require('mz/fs');
 
-let run = async () => {
+let simulate = async () => {
     let anonymousVoting, localCrypto, voters;
     localCrypto = await LocalCrypto.deployed();
     anonymousVoting = await AnonymousVoting.deployed();
@@ -36,5 +36,5 @@ let run = async () => {
 }
 
 module.exports = function(callback) {
-    run().then(callback);
+    simulate().then(callback);
 }
