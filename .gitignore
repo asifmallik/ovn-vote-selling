@@ -2,3 +2,4 @@ build
 contracts/.node*
 test/.node*
 node_modules
+scripts/voters.json
