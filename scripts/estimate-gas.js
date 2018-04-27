@@ -27,7 +27,7 @@ let simulate = async (voteOption, n) => {
     }
     [y, res, params] = await utils.generateVoteZKP(voters, localCryptoVoteSelling, H, (voteOption ? 1 : 0), voteOption, accounts[40]);
     tx = await anonymousVoteSelling.submitVoteProof(params, res, {from: accounts[40]});
-    gas.submissionCost = tx.receipt.gasUsed;
+    gas.submissionCost += tx.receipt.gasUsed;
     for (let i = 0; i < Math.ceil(n/3); i++) {
         tx = await anonymousVoteSelling.verifyVoteProof(((i+1)*3 > n ? n % 3 : 3), {from: accounts[40]});
         gas.verificationCost += tx.receipt.gasUsed;
